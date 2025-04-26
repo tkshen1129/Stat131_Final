@@ -71,7 +71,7 @@ Sigma0 <- matrix(0.6, nrow = 6, ncol = 6)
 # Set the diagonal entries to 1
 diag(Sigma0) <- 1
 Phi = diag(1,6)
-cQ = diag(1,6)
+cQ = diag(0.1,6)
 cR = diag(0.1,6)
 
 em = EM(obs_LCs[,1:6], A, mu0,Sigma0,Phi,cQ,cR,Ups = NULL, Gam = NULL, input = NULL,max.iter = 100, tol = 1e-04)
@@ -85,9 +85,9 @@ em$Sigma0
 ```
 ```{r fig2, fig.height = 15, fig.width =10, fig.align = "center"}
 smoother = Ksmooth(obs_LCs[,1:6], A, em$mu0, em$Sigma0, em$Phi, em$Q, em$R, Ups = NULL, Gam = NULL, 
-         input = NULL, S = NULL, version = 2)
+         input = NULL, S = NULL, version = 1)
 smoothed_mat   <- smoother$Xs[, 1, ]   # now a p × n matrix (here 6 × 4015)
-
+Ps        <- smoother$Ps 
 #Plot the light curves
 old_par <- par(mfrow = c(6, 1),   # 1 row, 6 columns
                mar   = c(2, 2, 1, 1))  # margins: bottom, left, top, right
@@ -97,7 +97,19 @@ for(i in seq_len(ncol(true_LCs))) {
   plot(time, true_LCs[,i],
      type  = "l",
      main  = paste("Band-", band_lists[i]))
-  lines(time,smoothed_mat[i, ], lwd = 2, lty = 2, col = "red")
+  
+  mu    <- smoothed_mat[i, ]
+  se    <- sqrt(Ps[i, i, ])
+  upper <- mu + 1.96 * se
+  lower <- mu - 1.96 * se
+  
+  polygon(c(time, rev(time)),
+        c(upper, rev(lower)),
+        col = gray(0.7, alpha = 0.5),
+        border = NA)
+  
+  lines(time,mu, lwd = 2, lty = 2, col = "red")
+  
   points(time, obs_LCs[,i],
        col = "blue",
        cex = 1.2)      # slightly larger
