@@ -1,0 +1,171 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+# Load simulated lightcurves from h5 file
+library(rhdf5);
+library(astsa)
+h5ls("./data/train_data_set.h5")
+```
+```{r fig1, fig.height = 15, fig.width =10, fig.align = "center"}
+
+band_lists = list("u","g","r","i","z","y")
+
+df <- h5read("./data/train_data_set.h5", "/training_2")
+time <- df$x #time
+
+# True LC (DRW+Transfer functions)
+LCs <- df$"true_LC"
+true_LCs = t(LCs)
+
+# Simulated observed LC
+LCs <- df$y
+obs_LCs = t(LCs)
+
+#observation mask, 1 if observed, 0 if unobserved
+mask <- df$mask
+mask <- t(mask)
+
+# Adjust the mean of the observed
+for (i in seq_len(ncol(true_LCs))) {
+  idx = which(mask[,i]==1)
+  obs_LCs[idx, i] <- obs_LCs[idx, i]- mean(obs_LCs[idx, i]) + mean(true_LCs[,i])
+}
+
+
+#Plot the light curves
+old_par <- par(mfrow = c(6, 1),   # 1 row, 6 columns
+               mar   = c(2, 2, 1, 1))  # margins: bottom, left, top, right
+# loop over the 6 columns
+for(i in seq_len(ncol(true_LCs))) {
+  plot(time, true_LCs[,i],
+       type  = "l",
+       main  = paste("Band-", band_lists[i]))
+  
+  points(time, obs_LCs[,i],
+       col = "blue",
+       cex = 1.2)      # slightly larger
+}
+```
+```{r fig2, fig.height = 15, fig.width =10, fig.align = "center"}
+
+old_par <- par(mfrow = c(6, 1),   # 1 row, 6 columns
+               mar   = c(2, 2, 1, 1))  # margins: bottom, left, top, right
+for(i in seq_len(ncol(true_LCs))) {
+  acf(true_LCs[,i],main = paste("ACF of band",band_lists[i]),ylab= "ACF")
+}
+```
+```{r}
+ccf(true_LCs[,1],true_LCs[,2],  main = "CCF: u band vs g band")
+ccf(true_LCs[,1],true_LCs[,3],  main = "CCF: u band vs r band")
+ccf(true_LCs[,1],true_LCs[,4],  main = "CCF: u band vs i band")
+ccf(true_LCs[,1],true_LCs[,5],  main = "CCF: u band vs  band")
+ccf(true_LCs[,1],true_LCs[,6],  main = "CCF: u band vs y band")
+```
+```{r}
+## Try picking a VAR model
+library(vars)
+VARselect(true_LCs,lag.max=30,type="const")
+```
+```{r}
+# Fit VAR
+fit <- VAR(true_LCs, p=22, type='const')
+summary(fit)
+```
+
+```{r}
+# Try rolling forcasting
+
+# — your data —  
+# assume true_LCs is a T×k matrix (or ts) with column names  
+p           <- 22                      # VAR lag order  
+h           <- 10                       # forecast horizon (1-step ahead)  
+window_size <- 200                     # length of each rolling window  
+T_total     <- nrow(true_LCs)  
+k           <- ncol(true_LCs)  
+
+# — storage for forecasts & errors —  
+n_roll      <- T_total - window_size - h + 1  
+fcst_roll   <- matrix(NA, nrow = n_roll, ncol = k,
+                      dimnames = list(NULL, colnames(true_LCs)))  
+err_roll    <- fcst_roll  
+
+# — rolling loop —  
+for(i in seq_len(n_roll)) {  
+  # define your training window  
+  train_idx <- i:(i + window_size - 1)  
+  train_dat <- true_LCs[train_idx, ]  
+  
+  # fit VAR on that window  
+  fit_i     <- VAR(train_dat, p = p, type = "const")  
+  
+  # one‐step ahead forecast  
+  pr        <- predict(fit_i, n.ahead = h)  
+  # extract the “fcst” column for each series  
+  fc_vals <- sapply(pr$fcst, function(x) x[1, "fcst"])
+  # store  
+  fcst_roll[i, ] <- fc_vals  
+  # true value at time (end of window + h)  
+  actual         <- true_LCs[train_idx[window_size] + h, ]  
+  err_roll[i, ]  <- actual - fc_vals  
+}  
+
+# — diagnostics —  
+# e.g. Mean Squared Forecast Error for each series  
+msfe <- colMeans(err_roll^2, na.rm = TRUE)  
+
+print(msfe)
+```
+
+```{r fig3, fig.height = 15, fig.width =10, fig.align = "center"}
+
+old_par <- par(mfrow = c(6, 1),   # 1 row, 6 columns
+               mar   = c(2, 2, 1, 1))  # margins: bottom, left, top, right
+for(j in seq_len(ncol(true_LCs))) { 
+# 1. time indices
+T_total    <- nrow(true_LCs)
+n_roll     <- nrow(fcst_roll)
+h          <- 1
+start_fcst <- window_size + h                # first forecast corresponds to this time
+end_fcst   <- window_size + h + n_roll - 1   # last forecast time
+
+time_all   <- 1:T_total                      # index for actual series
+time_fcst  <- start_fcst:end_fcst            # index for forecasts
+
+# 2. choose which series (column) to plot
+series_name <- colnames(true_LCs)[j]
+
+# 3. compute y-limits so both actual & forecast fit
+ymin <- min(true_LCs[, j], fcst_roll[, j], na.rm=TRUE)
+ymax <- max(true_LCs[, j], fcst_roll[, j], na.rm=TRUE)
+
+# 4. plot actual
+plot(time_all, true_LCs[, j],
+     type = "l",
+     col  = "black",
+     lwd  = 1.5,
+     xlab = "Time index",
+     ylab = series_name,
+     ylim = c(ymin, ymax),
+     main =paste("Rolling forcast",band_lists[j]))
+
+# 5. add rolling forecast
+lines(time_fcst, fcst_roll[, j],
+      col  = "red",
+      lty  = 2,
+      lwd  = 1.5)
+
+# 6. add legend
+legend("topleft",
+       legend = c("Actual","Forecast"),
+       col    = c("black","red"),
+       lty    = c(1,2),
+       lwd    = c(1.5,1.5),
+       bty    = "n")
+}
+
+```
+
+

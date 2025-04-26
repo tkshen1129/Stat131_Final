@@ -1,0 +1,67 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+# Load simulated lightcurves from h5 file
+library(rhdf5);
+library(astsa)
+h5ls("./data/train_data_set.h5")
+```
+```{r fig1, fig.height = 15, fig.width =10, fig.align = "center"}
+
+band_lists = list("u","g","r","i","z","y")
+
+df <- h5read("./data/train_data_set.h5", "/training_2")
+time <- df$x #time
+
+# True LC (DRW+Transfer functions)
+LCs <- df$"true_LC"
+true_LCs = t(LCs)
+
+# Simulated observed LC
+LCs <- df$y
+obs_LCs = t(LCs)
+
+#observation mask, 1 if observed, 0 if unobserved
+mask <- df$mask
+mask <- t(mask)
+
+# Adjust the mean of the observed
+for (i in seq_len(ncol(true_LCs))) {
+  idx = which(mask[,i]==1)
+  obs_LCs[idx, i] <- obs_LCs[idx, i]- mean(obs_LCs[idx, i]) + mean(true_LCs[,i])
+}
+
+
+#Plot the light curves
+old_par <- par(mfrow = c(6, 1),   # 1 row, 6 columns
+               mar   = c(2, 2, 1, 1))  # margins: bottom, left, top, right
+# loop over the 6 columns
+for(i in seq_len(ncol(true_LCs))) {
+  plot(time, true_LCs[,i],
+       type  = "l",
+       main  = paste("Band-", band_lists[i]))
+  
+  points(time, obs_LCs[,i],
+       col = "blue",
+       cex = 1.2)      # slightly larger
+}
+```
+```{r fig2, fig.height = 15, fig.width =10, fig.align = "center"}
+
+old_par <- par(mfrow = c(6, 1),   # 1 row, 6 columns
+               mar   = c(2, 2, 1, 1))  # margins: bottom, left, top, right
+for(i in seq_len(ncol(true_LCs))) {
+  acf(true_LCs[,i],main = paste("ACF of band",band_lists[i]),ylab= "ACF")
+}
+```
+```{r}
+ccf(true_LCs[,1],true_LCs[,2],  main = "CCF: u band vs g band")
+ccf(true_LCs[,1],true_LCs[,3],  main = "CCF: u band vs r band")
+ccf(true_LCs[,1],true_LCs[,4],  main = "CCF: u band vs i band")
+ccf(true_LCs[,1],true_LCs[,5],  main = "CCF: u band vs z band")
+ccf(true_LCs[,1],true_LCs[,6],  main = "CCF: u band vs y band")
+```
+
