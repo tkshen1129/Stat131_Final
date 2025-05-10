@@ -71,8 +71,8 @@ Sigma0 <- matrix(0.6, nrow = 6, ncol = 6)
 # Set the diagonal entries to 1
 diag(Sigma0) <- 1
 Phi = diag(1,6)
-cQ = diag(0.1,6)
-cR = diag(0.1,6)
+cQ = diag(0.05,6)
+cR = diag(0.05,6)
 
 em = EM(obs_LCs[,1:6], A, mu0,Sigma0,Phi,cQ,cR,Ups = NULL, Gam = NULL, input = NULL,max.iter = 100, tol = 1e-04)
 ```
@@ -120,6 +120,11 @@ for(i in seq_len(ncol(true_LCs))) {
        col    = c("black", "red", "blue"),
        bty    = "n")
 }
+```
+```{r}
+library(RcppCNPy)
+npySave("smoothed_mat_2.npy", smoothed_mat)
+npySave("Ps_2.npy", Ps)
 ```
 
 

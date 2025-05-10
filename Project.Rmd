@@ -13,7 +13,7 @@ h5ls("./data/train_data_set.h5")
 
 band_lists = list("u","g","r","i","z","y")
 
-df <- h5read("./data/train_data_set.h5", "/training_2")
+df <- h5read("./data/train_data_set.h5", "/training_5000")
 time <- df$x #time
 
 # True LC (DRW+Transfer functions)
@@ -56,13 +56,34 @@ old_par <- par(mfrow = c(6, 1),   # 1 row, 6 columns
 for(i in seq_len(ncol(true_LCs))) {
   acf(true_LCs[,i],main = paste("ACF of band",band_lists[i]),ylab= "ACF")
 }
+for(i in seq_len(ncol(true_LCs))) {
+  pacf(true_LCs[,i],main = paste("ACF of band",band_lists[i]),ylab= "PACF")
+}
 ```
 ```{r}
-ccf(true_LCs[,1],true_LCs[,2],  main = "CCF: u band vs g band")
-ccf(true_LCs[,1],true_LCs[,3],  main = "CCF: u band vs r band")
-ccf(true_LCs[,1],true_LCs[,4],  main = "CCF: u band vs i band")
-ccf(true_LCs[,1],true_LCs[,5],  main = "CCF: u band vs  band")
-ccf(true_LCs[,1],true_LCs[,6],  main = "CCF: u band vs y band")
+library(TSA);
+old_par <- par(mfrow = c(6, 1),   # 1 row, 6 columns
+               mar   = c(2, 2, 1, 1))  # margins: bottom, left, top, right
+for(i in seq_len(ncol(true_LCs))) {
+  eacf(true_LCs[,i])
+}
+
+```
+```{r fig2, fig.height = 15, fig.width =10, fig.align = "center"}
+old_par <- par(mfrow = c(5, 1),   # 1 row, 5 columns
+               mar   = c(2, 6, 1, 1))  # margins: bottom, left, top, right
+bands <- c("g","r","i","z","y")
+ylabs <- paste0("Corr(u, ", bands, ")")
+
+for (i in seq_along(bands)) {
+  ccf(
+    true_LCs[,1],
+    true_LCs[,i+1],
+    main  = paste("CCF: u vs", bands[i]),
+    ylab  = ylabs[i],
+    cex.lab = 2     # adjust label size if you like
+  )
+}
 ```
 ```{r}
 ## Try picking a VAR model
